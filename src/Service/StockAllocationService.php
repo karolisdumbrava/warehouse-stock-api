@@ -11,9 +11,27 @@ use App\Entity\Reservation;
 use App\Entity\WarehouseStock;
 use App\Repository\WarehouseStockRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 
-readonly class StockAllocationService implements StockAllocationServiceInterface
+/**
+ * Allocates warehouse stock to orders.
+ *
+ * Uses a greedy algorithm to minimize the number of warehouses used:
+ * 1. Find all warehouses with available stock for ordered products
+ * 2. Score each warehouse by how many order lines it can fulfill
+ * 3. Allocate from the best-scoring warehouse
+ * 4. Repeat until all lines are fulfilled or no more stock available
+ */
+readonly class StockAllocationService
 {
+    /**
+     * Constructs a new StockAllocationService.
+     *
+     * @param EntityManagerInterface $entityManager
+     *   The entity manager for database operations.
+     * @param WarehouseStockRepository $warehouseStockRepository
+     *   Repository for querying warehouse stock.
+     */
     public function __construct(
         private EntityManagerInterface $entityManager,
         private WarehouseStockRepository $warehouseStockRepository,
@@ -21,7 +39,20 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
     }
 
     /**
-     * @throws \Exception
+     * Allocates stock for an order from available warehouses.
+     *
+     * Attempts to reserve stock from the minimum number of warehouses
+     * necessary to fulfill the order. Uses pessimistic locking to prevent
+     * race conditions during concurrent allocations.
+     *
+     * @param Order $order
+     *   The order to allocate stock for.
+     *
+     * @return AllocationResult
+     *   Result containing allocation status and any missing items.
+     *
+     * @throws Exception
+     *   When database transaction fails.
      */
     public function allocateOrder(Order $order): AllocationResult
     {
@@ -33,12 +64,21 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
             $this->entityManager->commit();
 
             return $result;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->entityManager->rollback();
             throw $e;
         }
     }
 
+    /**
+     * Performs the actual allocation logic.
+     *
+     * @param Order $order
+     *   The order to allocate.
+     *
+     * @return AllocationResult
+     *   The allocation result.
+     */
     private function doAllocate(Order $order): AllocationResult
     {
         $orderLines = $order->orderLines->toArray();
@@ -47,54 +87,44 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
             return new AllocationResult(true, 0);
         }
 
-        // Get all products
         $products = array_map(static fn (OrderLine $line) => $line->product, $orderLines);
 
-        // Find all available stock (with pessimistic lock to prevent race conditions)
         $availableStocks = $this->warehouseStockRepository->findAvailableStocksForProducts(
             $products,
             withLock: true
         );
 
-        // Group stocks by warehouse for easier processing
         $stocksByWarehouse = $this->groupStocksByWarehouse($availableStocks);
-
-        // Track which warehouses we use
         $usedWarehouseIds = [];
 
-        // Keep allocating until all lines are fulfilled or no more stock
         while ($this->hasUnfulfilledLines($orderLines) && !empty($stocksByWarehouse)) {
-            // Find the best warehouse (covers most unfulfilled lines)
             $bestWarehouseId = $this->findBestWarehouse($orderLines, $stocksByWarehouse);
 
             if ($bestWarehouseId === null) {
                 break;
             }
 
-            // Allocate from this warehouse
-            $this->allocateFromWarehouse(
-                $orderLines,
-                $stocksByWarehouse[$bestWarehouseId]
-            );
-
+            $this->allocateFromWarehouse($orderLines, $stocksByWarehouse[$bestWarehouseId]);
             $usedWarehouseIds[$bestWarehouseId] = true;
 
-            // Remove warehouse if it has no more useful stock
             if (!$this->warehouseCanHelp($orderLines, $stocksByWarehouse[$bestWarehouseId])) {
                 unset($stocksByWarehouse[$bestWarehouseId]);
             }
         }
 
-        // Update order status based on allocation result
         $order->updateStatusFromReservations();
 
-        // Build result
         return $this->buildResult($orderLines, count($usedWarehouseIds));
     }
 
     /**
+     * Groups warehouse stocks by warehouse ID for efficient lookup.
+     *
      * @param WarehouseStock[] $stocks
-     * @return array<int, WarehouseStock[]> Warehouse ID => stocks
+     *   Array of warehouse stock entities.
+     *
+     * @return array<int, WarehouseStock[]>
+     *   Stocks indexed by warehouse ID.
      */
     private function groupStocksByWarehouse(array $stocks): array
     {
@@ -109,21 +139,29 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
     }
 
     /**
+     * Checks if any order lines still need stock allocation.
+     *
      * @param OrderLine[] $orderLines
+     *   The order lines to check.
+     *
+     * @return bool
+     *   TRUE if any lines are not fully reserved, FALSE otherwise.
      */
     private function hasUnfulfilledLines(array $orderLines): bool
     {
-        foreach ($orderLines as $line) {
-            if (!$line->isFullyReserved()) {
-                return true;
-            }
-        }
-        return false;
+        return array_any($orderLines, fn ($line) => !$line->isFullyReserved());
     }
 
     /**
+     * Finds the warehouse that can fulfill the most order lines.
+     *
      * @param OrderLine[] $orderLines
+     *   The order lines to fulfill.
      * @param array<int, WarehouseStock[]> $stocksByWarehouse
+     *   Available stocks grouped by warehouse ID.
+     *
+     * @return int|null
+     *   The best warehouse ID, or NULL if no warehouse can help.
      */
     private function findBestWarehouse(array $orderLines, array $stocksByWarehouse): ?int
     {
@@ -143,17 +181,22 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
     }
 
     /**
-     * Score = how many order lines this warehouse can contribute to
-     * Higher is better
+     * Scores a warehouse by how many unfulfilled lines it can contribute to.
+     *
+     * Higher scores indicate the warehouse can help with more order lines.
      *
      * @param OrderLine[] $orderLines
+     *   The order lines to evaluate against.
      * @param WarehouseStock[] $stocks
+     *   The warehouse's available stocks.
+     *
+     * @return int
+     *   The warehouse score (number of lines it can help fulfill).
      */
     private function scoreWarehouse(array $orderLines, array $stocks): int
     {
         $score = 0;
 
-        // Index stocks by product ID for fast lookup
         $stockByProduct = [];
         foreach ($stocks as $stock) {
             $stockByProduct[$stock->product->id] = $stock;
@@ -161,7 +204,7 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
 
         foreach ($orderLines as $line) {
             if ($line->isFullyReserved()) {
-                continue; // Already done
+                continue;
             }
 
             $productId = $line->product->id;
@@ -170,7 +213,7 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
                 $available = $stockByProduct[$productId]->getAvailableQuantity();
 
                 if ($available > 0) {
-                    $score++; // This warehouse can help with this line
+                    $score++;
                 }
             }
         }
@@ -179,12 +222,18 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
     }
 
     /**
+     * Allocates as much stock as possible from a single warehouse.
+     *
+     * Creates reservations for each order line that can be fulfilled
+     * from the warehouse's available stock.
+     *
      * @param OrderLine[] $orderLines
+     *   The order lines to allocate stock for.
      * @param WarehouseStock[] $stocks
+     *   The warehouse's available stocks.
      */
     private function allocateFromWarehouse(array $orderLines, array $stocks): void
     {
-        // Index stocks by product ID
         $stockByProduct = [];
         foreach ($stocks as $stock) {
             $stockByProduct[$stock->product->id] = $stock;
@@ -198,7 +247,7 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
             $productId = $line->product->id;
 
             if (!isset($stockByProduct[$productId])) {
-                continue; // This warehouse doesn't have this product
+                continue;
             }
 
             $stock = $stockByProduct[$productId];
@@ -209,13 +258,10 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
                 continue;
             }
 
-            // Take what we can (minimum of available and needed)
             $toReserve = min($available, $needed);
 
-            // Reserve in the warehouse stock
             $stock->reserve($toReserve);
 
-            // Create reservation record
             $reservation = new Reservation($line, $stock, $toReserve);
             $line->addReservation($reservation);
 
@@ -224,8 +270,15 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
     }
 
     /**
+     * Checks if a warehouse can still contribute to unfulfilled order lines.
+     *
      * @param OrderLine[] $orderLines
+     *   The order lines to check against.
      * @param WarehouseStock[] $stocks
+     *   The warehouse's stocks.
+     *
+     * @return bool
+     *   TRUE if the warehouse can still help, FALSE otherwise.
      */
     private function warehouseCanHelp(array $orderLines, array $stocks): bool
     {
@@ -233,7 +286,15 @@ readonly class StockAllocationService implements StockAllocationServiceInterface
     }
 
     /**
+     * Builds the allocation result from the current state of order lines.
+     *
      * @param OrderLine[] $orderLines
+     *   The order lines after allocation.
+     * @param int $warehousesUsed
+     *   Number of warehouses used in the allocation.
+     *
+     * @return AllocationResult
+     *   The allocation result with status and missing items.
      */
     private function buildResult(array $orderLines, int $warehousesUsed): AllocationResult
     {

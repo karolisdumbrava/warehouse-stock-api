@@ -6,6 +6,9 @@ namespace App\Exception;
 
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Thrown when an action cannot be performed due to order's current state.
+ */
 class InvalidOrderStateException extends LoggableException
 {
     public function __construct(

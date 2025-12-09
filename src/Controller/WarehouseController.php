@@ -10,6 +10,9 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 
+/**
+ * Warehouse and inventory management endpoints.
+ */
 #[Route('/api/warehouses')]
 class WarehouseController extends AbstractController
 {
@@ -18,6 +21,11 @@ class WarehouseController extends AbstractController
     ) {
     }
 
+    /**
+     * List all warehouses.
+     *
+     * @return JsonResponse Array of warehouses with id, name, and location
+     */
     #[Route('', name: 'warehouse_list', methods: ['GET'])]
     public function list(): JsonResponse
     {
@@ -32,6 +40,12 @@ class WarehouseController extends AbstractController
         return $this->json($data);
     }
 
+    /**
+     * Get warehouse details with current stock levels.
+     *
+     * @param int $id Warehouse ID
+     * @return JsonResponse Warehouse details including stock for all products
+     */
     #[Route('/{id}', name: 'warehouse_get', methods: ['GET'])]
     public function get(int $id): JsonResponse
     {

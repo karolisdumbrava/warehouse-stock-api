@@ -6,17 +6,22 @@ namespace App\DTO;
 
 use Symfony\Component\Validator\Constraints as Assert;
 
+/**
+ * Data transfer object for order creation requests.
+ *
+ * Contains the items to be ordered as a map of SKU to quantity.
+ */
 readonly class CreateOrderRequest
 {
     /**
-     * @param array<string, int> $items SKU => quantity
+     * Constructs a new CreateOrderRequest.
+     *
+     * @param array<string, int> $items
+     *   Map of product SKU to requested quantity.
      */
     public function __construct(
         #[Assert\NotBlank(message: 'Items cannot be empty')]
         #[Assert\Count(min: 1, minMessage: 'At least one item is required')]
-        #[Assert\All([
-            new Assert\Positive(message: 'Quantity must be positive'),
-        ])]
         public array $items,
     ) {
     }

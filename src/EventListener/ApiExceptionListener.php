@@ -13,6 +13,14 @@ use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 
+/**
+ * Converts exceptions to JSON responses for the API.
+ *
+ * Handles three types of exceptions:
+ * - LoggableException: Custom exceptions with separate public/log messages
+ * - HttpExceptionInterface: Standard Symfony HTTP exceptions
+ * - Everything else: Logged as errors, generic message returned
+ */
 #[AsEventListener(event: KernelEvents::EXCEPTION)]
 readonly class ApiExceptionListener
 {

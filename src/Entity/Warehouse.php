@@ -10,6 +10,9 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
+/**
+ * Physical warehouses location that holds product stock.
+ */
 #[ORM\Entity(repositoryClass: WarehouseRepository::class)]
 #[ORM\Table(name: 'warehouses')]
 class Warehouse

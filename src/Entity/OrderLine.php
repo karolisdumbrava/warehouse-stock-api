@@ -10,6 +10,11 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
+/**
+ * Individual line item within an order.
+ *
+ * Tracks requested quantity and reservations from various warehouses.
+ */
 #[ORM\Entity(repositoryClass: OrderLineRepository::class)]
 #[ORM\Table(name: 'order_lines')]
 #[ORM\Index(name: 'idx_order_line_order', columns: ['order_id'])]
@@ -97,7 +102,7 @@ class OrderLine
     }
 
     /**
-     * Clear all reservations and reset reserved quantity
+     * Clear all reservations and reset reserved quantity.
      */
     public function clearReservations(): self
     {
@@ -107,7 +112,7 @@ class OrderLine
     }
 
     /**
-     * How many units are still missing?
+     * Calculate how many units are still needed.
      */
     public function getMissingQuantity(): int
     {
@@ -115,7 +120,7 @@ class OrderLine
     }
 
     /**
-     * Is this line fully reserved?
+     * Check if requested quantity has been fully reserved.
      */
     public function isFullyReserved(): bool
     {
@@ -123,7 +128,7 @@ class OrderLine
     }
 
     /**
-     * Is this line partially reserved?
+     * Check if some but not all quantity has been reserved.
      */
     public function isPartiallyReserved(): bool
     {

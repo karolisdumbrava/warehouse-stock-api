@@ -6,6 +6,9 @@ namespace App\Exception;
 
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Thrown when an invalid quantity (zero or negative) is specified.
+ */
 class InvalidQuantityException extends LoggableException
 {
     public function __construct(

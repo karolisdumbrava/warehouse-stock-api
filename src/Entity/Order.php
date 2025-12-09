@@ -9,7 +9,18 @@ use App\Repository\OrderRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use DomainException;
 
+/**
+ * Represents a customer order containing one or more order lines.
+ *
+ * Orders go through the following lifecycle:
+ * - PENDING: Initial state, no stock reserved
+ * - PARTIALLY_RESERVED: Some items reserved, waiting for more stock
+ * - RESERVED: All items fully reserved
+ * - SHIPPED: Order has been shipped, stock decremented
+ * - CANCELED: Order canceled, reservations released
+ */
 #[ORM\Entity(repositoryClass: OrderRepository::class)]
 #[ORM\Table(name: 'orders')]
 #[ORM\Index(columns: ['status'], name: 'idx_order_status')]
@@ -129,6 +140,9 @@ class Order
         return $hasReservation && !$allFulfilled;
     }
 
+    /**
+     * Update order status based on current reservation state.
+     */
     public function updateStatusFromReservations(): self
     {
         if ($this->isFullyReserved()) {
@@ -151,10 +165,15 @@ class Order
             && $this->status !== OrderStatus::CANCELED;
     }
 
+    /**
+     * Mark order as shipped.
+     *
+     * @throws DomainException If order is canceled
+     */
     public function ship(): self
     {
         if ($this->status === OrderStatus::CANCELED) {
-            throw new \DomainException('Cannot ship a canceled order.');
+            throw new DomainException('Cannot ship a canceled order.');
         }
 
         $this->status = OrderStatus::SHIPPED;
@@ -162,10 +181,15 @@ class Order
         return $this;
     }
 
+    /**
+     * Cancel the order.
+     *
+     * @throws DomainException If order is already shipped
+     */
     public function cancel(): self
     {
         if ($this->status === OrderStatus::SHIPPED) {
-            throw new \DomainException('Cannot cancel a shipped order.');
+            throw new DomainException('Cannot cancel a shipped order.');
         }
 
         $this->status = OrderStatus::CANCELED;

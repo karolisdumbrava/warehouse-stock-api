@@ -10,6 +10,9 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
+/**
+ * Product that can be ordered and stored in warehouses.
+ */
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
 #[ORM\Table(name: 'products')]
 class Product
@@ -23,6 +26,7 @@ class Product
         }
     }
 
+    /** Unique stock keeping unit identifier */
     #[ORM\Column(length: 50, unique: true)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 50)]

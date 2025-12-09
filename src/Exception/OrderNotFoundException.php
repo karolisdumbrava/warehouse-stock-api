@@ -6,6 +6,9 @@ namespace App\Exception;
 
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Thrown when an order cannot be found or doesn't belong to the client.
+ */
 class OrderNotFoundException extends LoggableException
 {
     public function __construct(

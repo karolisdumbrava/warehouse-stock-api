@@ -35,6 +35,16 @@ class OrderRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Find an order that belongs to a specific client.
+     *
+     * @param int $id
+     *   Order id.
+     * @param Client $client
+     *   Client entity.
+     *
+     * @return Order|null Returns order.
+     */
     public function findByIdAndClient(int $id, Client $client): ?Order
     {
         return $this->findOneBy([

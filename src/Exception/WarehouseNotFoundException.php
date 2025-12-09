@@ -6,6 +6,9 @@ namespace App\Exception;
 
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Thrown when a warehouse ID doesn't exist.
+ */
 class WarehouseNotFoundException extends LoggableException
 {
     public function __construct(

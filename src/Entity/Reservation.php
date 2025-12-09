@@ -8,6 +8,11 @@ use App\Repository\ReservationRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
+/**
+ * Links an order line to warehouse stock, recording the reserved quantity.
+ *
+ * An order line may have multiple reservations from different warehouses.
+ */
 #[ORM\Entity(repositoryClass: ReservationRepository::class)]
 #[ORM\Table(name: 'reservations')]
 #[ORM\Index(name: 'idx_reservation_order_line', columns: ['order_line_id'])]
@@ -54,11 +59,17 @@ class Reservation
         $this->quantity = $quantity;
     }
 
+    /**
+     * Get the warehouse this reservation is from.
+     */
     public function getWarehouse(): Warehouse
     {
         return $this->warehouseStock->warehouse;
     }
 
+    /**
+     * Get the product being reserved.
+     */
     public function getProduct(): Product
     {
         return $this->orderLine->product;

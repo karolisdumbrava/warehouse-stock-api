@@ -9,6 +9,9 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 
+/**
+ * Product catalog endpoints.
+ */
 #[Route('/api/products')]
 class ProductController extends AbstractController
 {
@@ -17,6 +20,11 @@ class ProductController extends AbstractController
     ) {
     }
 
+    /**
+     * List all products.
+     *
+     * @return JsonResponse Array of products with id, sku, and name
+     */
     #[Route('', name: 'product_list', methods: ['GET'])]
     public function list(): JsonResponse
     {

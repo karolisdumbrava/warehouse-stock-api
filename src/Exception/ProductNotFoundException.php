@@ -6,6 +6,9 @@ namespace App\Exception;
 
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Thrown when a product SKU doesn't exist in the catalog.
+ */
 class ProductNotFoundException extends LoggableException
 {
     public function __construct(

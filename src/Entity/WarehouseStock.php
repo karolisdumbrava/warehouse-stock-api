@@ -8,8 +8,15 @@ use App\Repository\WarehouseStockRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use DomainException;
 use Symfony\Component\Validator\Constraints as Assert;
 
+/**
+ * Stock level for a specific product at a specific warehouse.
+ *
+ * Tracks total quantity and reserved quantity separately to support
+ * concurrent order processing without overselling.
+ */
 #[ORM\Entity(repositoryClass: WarehouseStockRepository::class)]
 #[ORM\Table(name: 'warehouse_stocks')]
 #[ORM\UniqueConstraint(name: 'warehouse_product_unique', columns: ['warehouse_id', 'product_id'])]
@@ -41,10 +48,12 @@ class WarehouseStock
         }
     }
 
+    /** Total physical quantity in warehouse */
     #[ORM\Column]
     #[Assert\PositiveOrZero]
     private int $quantity;
 
+    /** Quantity reserved for pending orders */
     #[ORM\Column]
     #[Assert\PositiveOrZero]
     private int $reservedQuantity = 0;
@@ -96,12 +105,15 @@ class WarehouseStock
     }
 
     /**
-     * Reserve stock (increases reservedQuantity)
+     * Reserve stock for an order.
+     *
+     * @param int $amount Quantity to reserve
+     * @throws DomainException If insufficient stock available
      */
     public function reserve(int $amount): self
     {
         if ($amount > $this->getAvailableQuantity()) {
-            throw new \DomainException(sprintf(
+            throw new DomainException(sprintf(
                 'Cannot reserve %d units. Only %d available.',
                 $amount,
                 $this->getAvailableQuantity()
@@ -113,12 +125,15 @@ class WarehouseStock
     }
 
     /**
-     * Release reservation (decreases reservedQuantity)
+     * Release a reservation back to available stock.
+     *
+     * @param int $amount Quantity to release
+     * @throws DomainException If amount exceeds reserved quantity
      */
     public function releaseReservation(int $amount): self
     {
         if ($amount > $this->reservedQuantity) {
-            throw new \DomainException(sprintf(
+            throw new DomainException(sprintf(
                 'Cannot release %d units. Only %d reserved.',
                 $amount,
                 $this->reservedQuantity
@@ -130,12 +145,15 @@ class WarehouseStock
     }
 
     /**
-     * Ship stock (decreases both quantity and reservedQuantity)
+     * Ship reserved stock (decrements both quantity and reserved).
+     *
+     * @param int $amount Quantity to ship
+     * @throws DomainException If amount exceeds reserved quantity
      */
     public function ship(int $amount): self
     {
         if ($amount > $this->reservedQuantity) {
-            throw new \DomainException(sprintf(
+            throw new DomainException(sprintf(
                 'Cannot ship %d units. Only %d reserved.',
                 $amount,
                 $this->reservedQuantity

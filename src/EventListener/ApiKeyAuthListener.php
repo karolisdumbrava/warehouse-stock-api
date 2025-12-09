@@ -11,6 +11,12 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
+/**
+ * Authenticates API requests using X-API-KEY header.
+ *
+ * Validates the API key against active clients and attaches
+ * the authenticated client to the request for use in controllers.
+ */
 #[AsEventListener(event: KernelEvents::REQUEST, priority: 10)]
 readonly class ApiKeyAuthListener
 {

@@ -6,18 +6,40 @@ namespace App\Service;
 
 use App\Entity\Order;
 use App\Repository\OrderRepository;
+use Exception;
 
+/**
+ * Attempts to improve allocations for partially reserved orders.
+ *
+ * When stock becomes available (e.g., after order cancellation or inventory
+ * replenishment), this service finds orders that need those products and
+ * attempts to allocate additional stock to them.
+ */
 readonly class ReoptimizationService
 {
+    /**
+     * Constructs a new ReoptimizationService.
+     *
+     * @param OrderRepository $orderRepository
+     *   Repository for querying orders.
+     * @param StockAllocationService $allocationService
+     *   Service for allocating stock to orders.
+     */
     public function __construct(
-        private OrderRepository        $orderRepository,
+        private OrderRepository $orderRepository,
         private StockAllocationService $allocationService,
-    ) {}
+    ) {
+    }
 
     /**
-     * Try to improve allocations for all partially reserved orders.
+     * Attempts to improve allocations for all partially reserved orders.
      *
-     * @return Order[] Orders that were improved
+     * Iterates through all orders with PARTIALLY_RESERVED status and
+     * attempts to allocate additional stock to each one.
+     *
+     * @return Order[]
+     *   Array of orders that were improved.
+     * @throws Exception
      */
     public function reoptimizePartialOrders(): array
     {
@@ -34,10 +56,18 @@ readonly class ReoptimizationService
     }
 
     /**
-     * Reoptimize orders that need specific products.
+     * Reoptimizes orders that need specific products.
      *
-     * @param int[] $productIds Products that were freed up
-     * @return Order[] Orders that were improved
+     * Only attempts reoptimization for orders that have unfulfilled
+     * lines for the given products, improving efficiency when stock
+     * for specific products becomes available.
+     *
+     * @param int[] $productIds
+     *   Array of product IDs that were freed up.
+     *
+     * @return Order[]
+     *   Array of orders that were improved.
+     * @throws Exception
      */
     public function reoptimizeForProducts(array $productIds): array
     {
@@ -62,7 +92,16 @@ readonly class ReoptimizationService
     }
 
     /**
-     * @throws \Exception
+     * Attempts to allocate more stock to an order.
+     *
+     * @param Order $order
+     *   The order to improve.
+     *
+     * @return bool
+     *   TRUE if any improvement was made, FALSE otherwise.
+     *
+     * @throws Exception
+     *   When allocation transaction fails.
      */
     private function tryImproveOrder(Order $order): bool
     {
@@ -76,7 +115,15 @@ readonly class ReoptimizationService
     }
 
     /**
+     * Checks if an order has unfulfilled lines for any of the given products.
+     *
+     * @param Order $order
+     *   The order to check.
      * @param int[] $productIds
+     *   Array of product IDs to check against.
+     *
+     * @return bool
+     *   TRUE if the order needs any of the products, FALSE otherwise.
      */
     private function orderNeedsProducts(Order $order, array $productIds): bool
     {

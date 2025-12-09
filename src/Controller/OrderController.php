@@ -8,6 +8,7 @@ use App\DTO\CreateOrderRequest;
 use App\Entity\Client;
 use App\Entity\Order;
 use App\Service\OrderService;
+use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,6 +16,11 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Attribute\Route;
 
+/**
+ * Handles order-related API endpoints.
+ *
+ * All endpoints require X-API-KEY header for authentication.
+ */
 #[Route('/api/orders')]
 class OrderController extends AbstractController
 {
@@ -24,7 +30,28 @@ class OrderController extends AbstractController
     }
 
     /**
-     * @throws \Exception
+     * Create a new order and allocate stock.
+     *
+     * Request body:
+     * ```json
+     * {
+     *     "items": {
+     *         "BOX-S": 10,
+     *         "BOX-M": 5
+     *     }
+     * }
+     * ```
+     *
+     * Response (201):
+     * ```json
+     * {
+     *     "success": true,
+     *     "fully_allocated": true,
+     *     "warehouses_used": 2,
+     *     "missing_items": {}
+     * }
+     * ```
+     * @throws Exception
      */
     #[Route('', name: 'order_create', methods: ['POST'])]
     public function create(
@@ -44,6 +71,12 @@ class OrderController extends AbstractController
         ], Response::HTTP_CREATED);
     }
 
+    /**
+     * Get order details by ID.
+     *
+     * @param int $id Order ID
+     * @return JsonResponse Order details with reservations
+     */
     #[Route('/{id<\d+>}', name: 'order_get', methods: ['GET'])]
     public function get(Request $request, int $id): JsonResponse
     {
@@ -52,6 +85,14 @@ class OrderController extends AbstractController
         return $this->json($this->serializeOrder($order));
     }
 
+    /**
+     * Ship an order.
+     *
+     * Marks the order as shipped and decrements warehouse stock.
+     * Cannot ship canceled orders.
+     *
+     * @param int $id Order ID
+     */
     #[Route('/{id<\d+>}/ship', name: 'order_ship', methods: ['POST'])]
     public function ship(Request $request, int $id): JsonResponse
     {
@@ -63,6 +104,15 @@ class OrderController extends AbstractController
         ]);
     }
 
+    /**
+     * Cancel an order.
+     *
+     * Releases all reserved stock back to warehouses.
+     * Triggers reoptimization for other partially reserved orders.
+     * Cannot cancel shipped orders.
+     *
+     * @param int $id Order ID
+     */
     #[Route('/{id<\d+>}/cancel', name: 'order_cancel', methods: ['POST'])]
     public function cancel(Request $request, int $id): JsonResponse
     {
@@ -79,6 +129,22 @@ class OrderController extends AbstractController
         return $request->attributes->get('client');
     }
 
+    /**
+     * @return array{
+     *     id: int|null,
+     *     status: string,
+     *     created_at: string,
+     *     shipped_at: string|null,
+     *     lines: array<array{
+     *         product_sku: string,
+     *         product_name: string,
+     *         requested_quantity: int,
+     *         reserved_quantity: int,
+     *         missing_quantity: int,
+     *         reservations: array<array{warehouse: string, quantity: int}>
+     *     }>
+     * }
+     */
     private function serializeOrder(Order $order): array
     {
         $lines = [];
