@@ -1,51 +1,85 @@
-# Symfony Docker
+# Stock Allocation API
 
-A [Docker](https://www.docker.com/)-based installer and runtime for the [Symfony](https://symfony.com) web framework,
-with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) inside!
+A REST API for managing orders and allocating stock across multiple warehouses. Built with Symfony 8 and PHP 8.4.
 
-![CI](https://github.com/dunglas/symfony-docker/workflows/CI/badge.svg)
+The system uses a greedy algorithm to minimize the number of warehouses used per order while handling concurrent requests with pessimistic locking.
 
-## Getting Started
+## Requirements
 
-1. If not already done, [install Docker Compose](https://docs.docker.com/compose/install/) (v2.10+)
-2. Run `docker compose build --pull --no-cache` to build fresh images
-3. Run `docker compose up --wait` to set up and start a fresh Symfony project
-4. Open `https://localhost` in your favorite web browser and [accept the auto-generated TLS certificate](https://stackoverflow.com/a/15076602/1352334)
-5. Run `docker compose down --remove-orphans` to stop the Docker containers.
+- Docker & Docker Compose
 
-## Features
+## Setup
 
-- Production, development and CI ready
-- Just 1 service by default
-- Blazing-fast performance thanks to [the worker mode of FrankenPHP](https://frankenphp.dev/docs/worker/)
-- [Installation of extra Docker Compose services](docs/extra-services.md) with Symfony Flex
-- Automatic HTTPS (in dev and prod)
-- HTTP/3 and [Early Hints](https://symfony.com/blog/new-in-symfony-6-3-early-hints) support
-- Real-time messaging thanks to a built-in [Mercure hub](https://symfony.com/doc/current/mercure.html)
-- [Vulcain](https://vulcain.rocks) support
-- Native [XDebug](docs/xdebug.md) integration
-- Super-readable configuration
+```bash
+# Build containers
+docker compose build --no-cache
 
-**Enjoy!**
+# Start services
+docker compose up --wait
 
-## Docs
+# Run database migrations
+docker compose exec php bin/console doctrine:migrations:migrate --no-interaction
 
-1. [Options available](docs/options.md)
-2. [Using Symfony Docker with an existing project](docs/existing-project.md)
-3. [Support for extra services](docs/extra-services.md)
-4. [Deploying in production](docs/production.md)
-5. [Debugging with Xdebug](docs/xdebug.md)
-6. [TLS Certificates](docs/tls.md)
-7. [Using MySQL instead of PostgreSQL](docs/mysql.md)
-8. [Using Alpine Linux instead of Debian](docs/alpine.md)
-9. [Using a Makefile](docs/makefile.md)
-10. [Updating the template](docs/updating.md)
-11. [Troubleshooting](docs/troubleshooting.md)
+# Load sample data
+docker compose exec php bin/console doctrine:fixtures:load --no-interaction
+```
 
-## License
+The API is now available at `https://localhost`
 
-Symfony Docker is available under the MIT License.
+## Running Tests
 
-## Credits
+```bash
+docker compose exec php bin/phpunit
+```
 
-Created by [Kévin Dunglas](https://dunglas.dev), co-maintained by [Maxime Helias](https://twitter.com/maxhelias) and sponsored by [Les-Tilleuls.coop](https://les-tilleuls.coop).
+## API Usage
+
+All endpoints require the `X-API-KEY` header. Sample keys from fixtures:
+
+- `vinted-api-key-2025`
+- `senukai-api-key-2025`
+- `test-api-key`
+
+> **Note:** Use `-k` flag with curl to accept the self-signed certificate.
+
+### Create Order
+
+```bash
+curl -k -X POST https://localhost/api/orders -H "Content-Type: application/json" -H "X-API-KEY: test-api-key" -d '{"items": {"BOX-S": 10, "BOX-M": 5}}'
+```
+
+### Get Order
+
+```bash
+curl -k https://localhost/api/orders/1 -H "X-API-KEY: test-api-key"
+```
+
+### Ship Order
+
+```bash
+curl -k -X POST https://localhost/api/orders/1/ship -H "X-API-KEY: test-api-key"
+```
+
+### Cancel Order
+
+```bash
+curl -k -X POST https://localhost/api/orders/1/cancel -H "X-API-KEY: test-api-key"
+```
+
+### List Products
+
+```bash
+curl -k https://localhost/api/products -H "X-API-KEY: test-api-key"
+```
+
+### List Warehouses
+
+```bash
+curl -k https://localhost/api/warehouses -H "X-API-KEY: test-api-key"
+```
+
+### Get Warehouse Stock
+
+```bash
+curl -k https://localhost/api/warehouses/1 -H "X-API-KEY: test-api-key"
+```
